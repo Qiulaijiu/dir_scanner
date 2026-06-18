@@ -1,6 +1,9 @@
 # dir_scanner - SRC目录扫描工具
 
 > 整合SRC内部字典和dirsearch通用字典的高性能目录路径探测工具，支持爬虫模式、WAF绕过、频率限制、随机UA池、扫描历史记忆
+> 演示过程
+> <img width="1480" height="759" alt="image" src="https://github.com/user-attachments/assets/f99123ca-ad7f-495d-8fd6-a7a3bb287324" />
+
 
 ## 功能特性
 
