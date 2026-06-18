@@ -1,0 +1,40 @@
+<?xml version="1.0" ?>
+<dir_scanner_report>
+  <meta>
+    <tool>dir_scanner</tool>
+    <version>1.0.0</version>
+    <date>2026-06-18 09:43:43</date>
+    <total_results>4</total_results>
+  </meta>
+  <results>
+    <result>
+      <url>http://target.com/admin</url>
+      <path>/admin</path>
+      <status>200</status>
+      <length>1234</length>
+      <content_type>text/html</content_type>
+    </result>
+    <result>
+      <url>http://target.com/api/v1</url>
+      <path>/api/v1</path>
+      <status>301</status>
+      <length>0</length>
+      <content_type>text/html</content_type>
+      <redirect>/api/v2</redirect>
+    </result>
+    <result>
+      <url>http://target.com/config</url>
+      <path>/config</path>
+      <status>403</status>
+      <length>567</length>
+      <content_type>text/html</content_type>
+    </result>
+    <result>
+      <url>http://target.com/backup.sql</url>
+      <path>/backup.sql</path>
+      <status>200</status>
+      <length>89012</length>
+      <content_type>text/html</content_type>
+    </result>
+  </results>
+</dir_scanner_report>

@@ -1,0 +1,36 @@
+{
+  "tool": "dir_scanner",
+  "version": "1.0.0",
+  "date": "2026-06-18 09:43:43",
+  "results": [
+    {
+      "url": "http://target.com/admin",
+      "path": "/admin",
+      "status": 200,
+      "length": 1234,
+      "content_type": "text/html"
+    },
+    {
+      "url": "http://target.com/api/v1",
+      "path": "/api/v1",
+      "status": 301,
+      "length": 0,
+      "content_type": "text/html",
+      "redirect": "/api/v2"
+    },
+    {
+      "url": "http://target.com/config",
+      "path": "/config",
+      "status": 403,
+      "length": 567,
+      "content_type": "text/html"
+    },
+    {
+      "url": "http://target.com/backup.sql",
+      "path": "/backup.sql",
+      "status": 200,
+      "length": 89012,
+      "content_type": "text/html"
+    }
+  ]
+}

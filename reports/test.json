@@ -1,0 +1,63 @@
+{
+  "tool": "dir_scanner",
+  "version": "1.0.0",
+  "date": "2026-06-18 10:42:08",
+  "results": [
+    {
+      "url": "https://tidesec.com///js",
+      "path": "////js",
+      "status": 301,
+      "length": 162,
+      "content_type": "unknown"
+    },
+    {
+      "url": "https://tidesec.com///php.bak",
+      "path": "////php.bak",
+      "status": 403,
+      "length": 1322,
+      "content_type": "unknown"
+    },
+    {
+      "url": "https://tidesec.com///!.htaccess",
+      "path": "////!.htaccess",
+      "status": 403,
+      "length": 1322,
+      "content_type": "unknown"
+    },
+    {
+      "url": "https://tidesec.com///jsp.bak",
+      "path": "////jsp.bak",
+      "status": 403,
+      "length": 1322,
+      "content_type": "unknown"
+    },
+    {
+      "url": "https://tidesec.com///asp.bak",
+      "path": "////asp.bak",
+      "status": 403,
+      "length": 1322,
+      "content_type": "unknown"
+    },
+    {
+      "url": "https://tidesec.com///aspx.bak",
+      "path": "////aspx.bak",
+      "status": 403,
+      "length": 1322,
+      "content_type": "unknown"
+    },
+    {
+      "url": "https://tidesec.com///html.bak",
+      "path": "////html.bak",
+      "status": 403,
+      "length": 1322,
+      "content_type": "unknown"
+    },
+    {
+      "url": "https://tidesec.com///js.bak",
+      "path": "////js.bak",
+      "status": 403,
+      "length": 1322,
+      "content_type": "unknown"
+    }
+  ]
+}

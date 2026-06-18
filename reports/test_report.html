@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>dir_scanner Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: #eee; }
+        h1 { color: #00bcd4; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { padding: 8px 12px; text-align: left; border: 1px solid #333; }
+        th { background: #333; color: #00bcd4; }
+        tr:nth-child(even) { background: #222; }
+        tr:hover { background: #2a2a2a; }
+        .status-2xx { color: #4caf50; }
+        .status-3xx { color: #00bcd4; }
+        .status-4xx { color: #ff9800; }
+        .status-5xx { color: #f44336; }
+        .info { margin: 20px 0; color: #888; }
+        a { color: #00bcd4; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>dir_scanner Scan Report</h1>
+    <div class="info">
+        <p>Generated: 2026-06-18 09:43:43</p>
+        <p>Total Results: 4</p>
+    </div>
+    <table>
+        <tr>
+            <th>#</th>
+            <th>Status</th>
+            <th>Size</th>
+            <th>URL</th>
+            <th>Content-Type</th>
+            <th>Redirect</th>
+        </tr>
+                <tr>
+            <td>1</td>
+            <td class="status-2xx">200</td>
+            <td>1.2KB</td>
+            <td><a href="http://target.com/admin" target="_blank">/admin</a></td>
+            <td>text/html</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>2</td>
+            <td class="status-3xx">301</td>
+            <td>0.0B</td>
+            <td><a href="http://target.com/api/v1" target="_blank">/api/v1</a></td>
+            <td>text/html</td>
+            <td>/api/v2</td>
+        </tr>
+        <tr>
+            <td>3</td>
+            <td class="status-4xx">403</td>
+            <td>567.0B</td>
+            <td><a href="http://target.com/config" target="_blank">/config</a></td>
+            <td>text/html</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>4</td>
+            <td class="status-2xx">200</td>
+            <td>86.9KB</td>
+            <td><a href="http://target.com/backup.sql" target="_blank">/backup.sql</a></td>
+            <td>text/html</td>
+            <td></td>
+        </tr>
+    </table>
+</body>
+</html>

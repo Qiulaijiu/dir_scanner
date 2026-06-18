@@ -1,0 +1,5 @@
+URL,Status,Size,Content-Type,Redirect
+http://target.com/admin,200,1234,text/html,
+http://target.com/api/v1,301,0,text/html,/api/v2
+http://target.com/config,403,567,text/html,
+http://target.com/backup.sql,200,89012,text/html,
