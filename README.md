@@ -531,6 +531,11 @@ lib.controller.controller (主控制器)
 6. **代理使用** - 建议在测试时使用代理，避免暴露真实IP
 7. **状态码过滤** - 默认只显示有效状态码，使用 `-i 100-599` 显示全部
 
+## bug提交
+
+liu058988@163.com
+欢迎大家共创
+
 ## License
 
 MIT License
