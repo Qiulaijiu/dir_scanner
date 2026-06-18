@@ -44,6 +44,22 @@ def human_size(num):
     return f"{num:.1f}PB"
 
 
+def parse_size(size_str):
+    """解析人类可读的大小字符串为字节数，支持 '500B', '1.2KB', '10MB' 等格式"""
+    size_str = size_str.strip().upper()
+    units = {"B": 1, "KB": 1024, "MB": 1024**2, "GB": 1024**3, "TB": 1024**4}
+    for suffix, multiplier in sorted(units.items(), key=lambda x: -len(x[0])):
+        if size_str.endswith(suffix):
+            try:
+                return int(float(size_str[:-len(suffix)]) * multiplier)
+            except ValueError:
+                return 0
+    try:
+        return int(size_str)
+    except ValueError:
+        return 0
+
+
 def is_binary(bytes_):
     """判断内容是否为二进制"""
     text_chars = bytearray({7, 8, 9, 10, 12, 13, 27} | set(range(0x20, 0x100)) - {0x7F})

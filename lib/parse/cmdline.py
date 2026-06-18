@@ -115,6 +115,17 @@ def parse_arguments():
                      help="启用403绕过模式(路径变形+HTTP方法+IP头伪造+URL重写)")
     waf.add_argument("--random-user-agents", action="store_true", help="随机User-Agent池")
 
+    # 爬虫设置（默认开启）
+    crawl = parser.add_argument_group("Crawler Settings")
+    crawl.add_argument("--no-crawl", action="store_true",
+                       help="禁用爬虫模式(默认从HTML/JS/robots.txt/sitemap.xml中提取路径)")
+    crawl.add_argument("--crawl-depth", type=int, default=0,
+                       help="爬虫提取路径的最大深度(0=不限制)")
+    crawl.add_argument("--no-robots", action="store_true",
+                       help="禁用robots.txt解析")
+    crawl.add_argument("--no-sitemap", action="store_true",
+                       help="禁用sitemap.xml解析")
+
     # 视图设置
     view = parser.add_argument_group("View Settings")
     view.add_argument("--full-url", action="store_true", help="显示完整URL")
@@ -133,6 +144,9 @@ def parse_arguments():
     # 其他
     parser.add_argument("--list", action="store_true", help="列出所有可用字典类别")
     parser.add_argument("--list-extensions", action="store_true", help="列出所有扩展名")
+    parser.add_argument("--history", action="store_true", help="查看扫描历史记录")
+    parser.add_argument("--clear-history", nargs="?", const="__all__", help="清除历史记录(不指定URL则清除全部)")
+    parser.add_argument("--force", action="store_true", help="强制重新扫描(忽略历史记录)")
 
     args = parser.parse_args()
 

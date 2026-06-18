@@ -4,6 +4,7 @@
 """
 
 import asyncio
+import threading
 import time
 
 
@@ -47,20 +48,22 @@ class SyncRateLimiter:
         self.rate = rate
         self.tokens = rate
         self.last_time = time.monotonic()
+        self._lock = threading.Lock()
 
     def acquire(self):
         """获取一个令牌"""
-        now = time.monotonic()
-        elapsed = now - self.last_time
-        self.tokens = min(self.rate, self.tokens + elapsed * self.rate)
-        self.last_time = now
+        with self._lock:
+            now = time.monotonic()
+            elapsed = now - self.last_time
+            self.tokens = min(self.rate, self.tokens + elapsed * self.rate)
+            self.last_time = now
 
-        if self.tokens < 1:
-            wait = (1 - self.tokens) / self.rate
-            time.sleep(wait)
-            self.tokens = 0
-        else:
-            self.tokens -= 1
+            if self.tokens < 1:
+                wait = (1 - self.tokens) / self.rate
+                time.sleep(wait)
+                self.tokens = 0
+            else:
+                self.tokens -= 1
 
     def reset(self):
         """重置限速器"""

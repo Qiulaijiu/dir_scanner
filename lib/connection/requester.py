@@ -3,6 +3,7 @@
 HTTP请求器
 """
 
+import collections
 import random
 import re
 import requests
@@ -36,6 +37,7 @@ class Requester:
         self._url = None
         self._proxy_cred = None
         self._rate = 0
+        self._rate_timestamps = collections.deque()
         self.headers = CaseInsensitiveDict(options.get("headers", {}))
         self.agents = []
         self.session = requests.Session()
@@ -115,7 +117,10 @@ class Requester:
         err_msg = None
         # 规范化URL，避免双斜杠
         base = self._url.rstrip("/") if self._url else ""
-        url = safequote(base + "/" + path.lstrip("/") if self._url else path)
+        url = base + "/" + path.lstrip("/") if self._url else path
+        # 合并双斜杠（保留协议的://）
+        url = re.sub(r"(?<!:)//+", "/", url)
+        url = safequote(url)
         original_path = path
 
         max_retries = options.get("max_retries", 1)
@@ -145,9 +150,9 @@ class Requester:
                 request_path = original_path
                 if self.waf_bypass:
                     request_path = WAFBypass.apply_path_bypass(request_path)
-                    url = safequote(self._url + request_path if self._url else request_path)
+                    url = safequote(base + "/" + request_path.lstrip("/") if self._url else request_path)
                 else:
-                    url = safequote(self._url + original_path if self._url else original_path)
+                    url = safequote(base + "/" + original_path.lstrip("/") if self._url else original_path)
 
                 # WAF垃圾参数
                 if self.waf_bypass and random.random() > 0.6:
@@ -199,12 +204,19 @@ class Requester:
         self._rate -= 1
 
     def increase_rate(self):
-        self._rate += 1
-        timer = threading.Timer(1, self.decrease_rate)
-        timer.daemon = True
-        timer.start()
+        now = time.monotonic()
+        self._rate_timestamps.append(now)
+        # 清理超过1秒的记录
+        while self._rate_timestamps and self._rate_timestamps[0] < now - 1.0:
+            self._rate_timestamps.popleft()
+        self._rate = len(self._rate_timestamps)
 
     @property
     @cached(RATE_UPDATE_DELAY)
     def rate(self):
+        # 刷新当前速率
+        now = time.monotonic()
+        while self._rate_timestamps and self._rate_timestamps[0] < now - 1.0:
+            self._rate_timestamps.popleft()
+        self._rate = len(self._rate_timestamps)
         return self._rate

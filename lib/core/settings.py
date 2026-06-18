@@ -100,6 +100,42 @@ SRC_WORDLISTS = [
 # 通用字典文件名
 DEFAULT_WORDLIST = "dicc.txt"
 
+# 爬虫相关常量
+CRAWL_TAG = "[CRAWL]"
+
+# HTML标签中可能包含路径的属性
+HTML_LINK_ATTRS = (
+    "href", "src", "action", "data-src", "data-href", "data-url",
+    "content", "url", "poster", "background", "formaction",
+)
+
+# HTML标签名
+HTML_LINK_TAGS = (
+    "a", "form", "script", "link", "img", "iframe", "frame",
+    "embed", "object", "source", "video", "audio", "track",
+    "area", "base", "input", "button",
+)
+
+# JS中路径提取正则
+JS_PATH_REGEXES = (
+    r"""(?:"|')(/(?:[a-zA-Z0-9_\-./]+)?)\??[^"']*(?:"|')""",
+    r"""(?:"|')(https?://[^"']+)(?:"|')""",
+    r"""(?:path|url|href|src|action|endpoint|api)\s*[:=]\s*(?:"|')(/[^"']+)(?:"|')""",
+    r"""(?:fetch|axios|ajax|get|post|put|delete)\s*\(\s*(?:"|')(/[^"']+)(?:"|')""",
+)
+
+# HTML注释中的路径提取正则
+COMMENT_PATH_REGEX = r"""<!--[\s\S]*?-->"""
+
+# robots.txt User-Agent 段落匹配
+ROBOTS_USERAGENT_REGEX = r"(?i)^User-agent:\s*\*"
+
+# robots.txt Disallow/Allow 匹配
+ROBOTS_DIRECTIVE_REGEX = r"(?i)^(?:Disallow|Allow):\s*(.+)"
+
+# sitemap.xml loc 匹配
+SITEMAP_LOC_REGEX = r"<loc>\s*(.*?)\s*</loc>"
+
 # 随机UA池
 USER_AGENT_POOL = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",

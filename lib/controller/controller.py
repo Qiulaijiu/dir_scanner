@@ -10,9 +10,11 @@ import time
 from urllib.parse import urlparse
 
 from lib.connection.requester import Requester
+from lib.core.crawler import Crawler
 from lib.core.data import blacklists, options
 from lib.core.decorators import locked
 from lib.core.dictionary import Dictionary, get_blacklists, load_wordlists_from_directory, list_categories
+from lib.core.history import get_history, save_scan_result
 from lib.core.exceptions import (
     InvalidURLException,
     RequestException,
@@ -66,6 +68,11 @@ class Controller:
         # 创建请求器
         self.requester = Requester()
 
+        # 爬虫
+        self.crawler = None
+        self.crawled_paths = set()
+        self.crawled_count = 0
+
         # 创建字典 - 根据模式选择
         wordlist_dir = options.get("wordlist_dir", os.path.join(SCRIPT_PATH, "wordlists"))
         src_mode = options.get("src_mode", False)
@@ -88,6 +95,13 @@ class Controller:
             else:
                 # SRC全量模式
                 self.dictionary = Dictionary(wordlist_dir=wordlist_dir, mode="src")
+        elif categories:
+            # -c/--category 指定了类别
+            self.dictionary = Dictionary(
+                wordlist_dir=wordlist_dir,
+                mode="src-select",
+                categories=categories
+            )
         else:
             # 默认模式（使用dirsearch通用字典）
             self.dictionary = Dictionary(wordlist_dir=wordlist_dir, mode="default")
@@ -105,6 +119,7 @@ class Controller:
         self.seen_responses = {}  # 去重: (status, body_hash) -> count
         self.filtered_responses = []  # 被过滤的响应
         self.paths_403 = []  # 收集403路径用于bypass
+        self.crawled_test_results = []  # 爬虫路径自动测试结果
 
         # 设置报告
         self.setup_reports()
@@ -130,13 +145,37 @@ class Controller:
             )
 
             try:
+                # 检查扫描历史
+                if not options.get("force", False):
+                    prev = get_history(url)
+                    if prev:
+                        self._show_history(prev)
+                        choice = input("\n  是否重新扫描? [y/N] ").strip().lower()
+                        if choice not in ("y", "yes"):
+                            output.warning(f"[*] 跳过 {url}")
+                            self.targets.pop(0)
+                            continue
+
+                # 爬虫模式确认
+                if options.get("crawl", False):
+                    output.warning("[*] 爬虫模式已启用(默认)，将从HTML/JS/robots.txt/sitemap.xml中提取路径")
+                    choice = input("  是否继续使用爬虫模式? [Y/n] ").strip().lower()
+                    if choice in ("n", "no"):
+                        options["crawl"] = False
+                        output.warning("[*] 已禁用爬虫模式")
+
                 self.set_target(url)
+
+                # 初始化爬虫
+                if options.get("crawl", False):
+                    self.crawler = Crawler(self.target_url, self.requester)
+                    self._crawl_robots_and_sitemap()
 
                 if not self.directories:
                     for subdir in options.get("subdirs", ["/"]):
                         self.add_directory(self.base_path + subdir)
 
-                output.target(self.url)
+                output.target(self.target_url)
                 self.start()
 
             except (
@@ -160,7 +199,27 @@ class Controller:
 
         elapsed_time = time.time() - self.start_time
         filtered_count = sum(c - 1 for c in self.seen_responses.values() if c > 1)
-        output.scan_summary(self.results, elapsed_time, filtered_count, self.filtered_responses)
+        output.scan_summary(self.results, elapsed_time, filtered_count, self.filtered_responses, self.crawled_count)
+
+        # 显示爬虫路径测试结果
+        if self.crawled_test_results:
+            output.crawl_test_summary(self.crawled_test_results)
+
+        # 保存扫描结果到历史（每个目标单独保存）
+        if self.results or self.crawled_test_results:
+            mode = "SRC" if options.get("src_mode") else "default"
+            categories = options.get("src_categories") or options.get("categories")
+            for target_url in options.get("urls", []):
+                save_scan_result(
+                    target_url, self.results, elapsed_time,
+                    len(self.dictionary), mode, categories,
+                    self.crawled_test_results
+                )
+                output.warning(f"[*] {target_url} 扫描结果已保存到历史记录 (使用 --history 查看)")
+
+            # 自动保存结果文件（未指定-o时）
+            if not options.get("output_file"):
+                self._auto_save_results(elapsed_time)
 
         # 403 Bypass模式
         if options.get("bypass_403", False) and self.paths_403:
@@ -210,6 +269,9 @@ class Controller:
             self.url += f":{port}"
         self.url += "/"
 
+        # 完整目标URL（含路径），用于显示和爬虫
+        self.target_url = self.url.rstrip("/") + self.base_path
+
         self.requester.set_url(self.url)
 
     def setup_reports(self):
@@ -237,6 +299,187 @@ class Controller:
 
         output.output_file(output_file)
 
+    def _crawl_robots_and_sitemap(self):
+        """扫描前解析 robots.txt 和 sitemap.xml"""
+        paths = []
+
+        if not options.get("no_robots", False):
+            robots_paths = self.crawler.crawl_robots()
+            if robots_paths:
+                paths.extend(robots_paths)
+                output.warning(f"[*] robots.txt: 发现 {len(robots_paths)} 条路径")
+
+        if not options.get("no_sitemap", False):
+            sitemap_paths = self.crawler.crawl_sitemap()
+            if sitemap_paths:
+                paths.extend(sitemap_paths)
+                output.warning(f"[*] sitemap.xml: 发现 {len(sitemap_paths)} 条路径")
+
+        if paths:
+            self._add_crawled_paths(paths, source="robots/sitemap")
+
+    def _add_crawled_paths(self, paths, source=""):
+        """将爬虫发现的路径加入扫描队列并自动测试可访问性"""
+        for path in paths:
+            if path in self.crawled_paths:
+                continue
+            self.crawled_paths.add(path)
+            self.crawled_count += 1
+
+            # 输出发现日志
+            if not options.get("quiet", False):
+                output.crawl_found(path, source)
+
+            # 自动测试爬取路径的可访问性
+            self._test_crawled_path(path, source)
+
+            # 检查深度限制
+            crawl_depth = options.get("crawl_depth", 0)
+            if crawl_depth > 0 and path.count("/") > crawl_depth:
+                continue
+
+            # 将路径对应的目录加入扫描队列
+            # 提取目录部分
+            if "/" in path:
+                dir_path = path.rsplit("/", 1)[0] + "/"
+                self.recur(dir_path)
+
+    def _test_crawled_path(self, path, source=""):
+        """测试爬虫发现的路径可访问性"""
+        try:
+            resp = self.requester.request(path.lstrip("/"))
+            if resp.status in (200, 201, 204, 301, 302, 307, 308, 401, 403):
+                result = {
+                    "path": path,
+                    "status": resp.status,
+                    "length": resp.length,
+                    "type": resp.type,
+                    "source": source,
+                    "redirect": resp.redirect or "",
+                }
+                self.crawled_test_results.append(result)
+                output.crawl_test_result(path, resp.status, resp.length, resp.type)
+        except RequestException:
+            pass
+        except Exception as e:
+            logger.debug(f"爬虫路径测试失败 {path}: {e}")
+
+    def _show_history(self, entry):
+        """展示历史扫描结果"""
+        from lib.utils.common import human_size
+        output.warning(f"\n[*] 已扫描过此目标 (使用 --force 强制重新扫描)")
+        print(f"  上次扫描: {entry.get('scan_time', 'N/A')}")
+        print(f"  耗时: {entry.get('elapsed_time', 0)}秒")
+        print(f"  模式: {entry.get('mode', 'N/A')}")
+        if entry.get("categories"):
+            print(f"  类别: {', '.join(entry['categories'])}")
+        print(f"  字典: {entry.get('wordlist_size', 0)} 条")
+        print(f"  发现: {entry.get('total_found', 0)} 条有效路径")
+
+        status = entry.get("status_summary", {})
+        if status:
+            parts = [f"[{s}]x{c}" for s, c in sorted(status.items())]
+            print(f"  状态: {', '.join(parts)}")
+
+        results = entry.get("results", [])
+        if results:
+            print(f"\n  {'─'*50}")
+            print(f"  {'状态':<6} {'大小':>8}  路径")
+            print(f"  {'─'*50}")
+            for r in results[:50]:
+                size = human_size(r.get("length", 0)).rjust(6)
+                path = r.get("path", "")
+                status = r.get("status", 0)
+                redirect = r.get("redirect", "")
+                line = f"  {status:<6} {size}  {path}"
+                if redirect:
+                    line += f"  ->  {redirect}"
+                print(line)
+            if len(results) > 50:
+                print(f"  ... 还有 {len(results) - 50} 条结果")
+
+        crawled = entry.get("crawled_results", [])
+        if crawled:
+            print(f"\n  {'─'*50}")
+            print(f"  爬虫路径测试 ({len(crawled)} 条)")
+            print(f"  {'状态':<6} {'大小':>8}  路径")
+            print(f"  {'─'*50}")
+            for r in crawled[:50]:
+                size = human_size(r.get("length", 0)).rjust(6)
+                path = r.get("path", "")
+                status = r.get("status", 0)
+                ct = r.get("content_type", "")
+                tag = " [API]" if "json" in ct else ""
+                print(f"  {status:<6} {size}  {path}{tag}")
+            if len(crawled) > 50:
+                print(f"  ... 还有 {len(crawled) - 50} 条结果")
+
+    def _auto_save_results(self, elapsed_time):
+        """自动保存扫描结果到文件"""
+        from lib.utils.common import human_size
+
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        target_host = urlparse(self.url).netloc.replace(":", "_")
+        filename = f"scan_{target_host}_{timestamp}.txt"
+        output_dir = os.path.join(SCRIPT_PATH, "results")
+        os.makedirs(output_dir, exist_ok=True)
+        filepath = os.path.join(output_dir, filename)
+
+        # 合并所有结果用于分类
+        all_items = []
+        for r in self.results:
+            path = "/" + r.full_path.lstrip("/")
+            ext = path.rsplit(".", 1)[-1].lower() if "." in path.split("/")[-1] else ""
+            all_items.append({
+                "path": path, "status": r.status, "length": r.length,
+                "ext": ext, "redirect": r.redirect or "", "source": "scan"
+            })
+        for r in self.crawled_test_results:
+            ext = r["path"].rsplit(".", 1)[-1].lower() if "." in r["path"].split("/")[-1] else ""
+            all_items.append({
+                "path": r["path"], "status": r["status"], "length": r["length"],
+                "ext": ext, "redirect": r.get("redirect", ""), "source": "crawl",
+                "type": r.get("type", "")
+            })
+
+        # 按扩展名分类
+        ext_groups = {}
+        for item in all_items:
+            ext = item["ext"] or "无扩展名"
+            ext_groups.setdefault(ext, []).append(item)
+
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(f"=== dir_scanner 扫描结果 ===\n")
+                f.write(f"目标: {self.url}\n")
+                f.write(f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"耗时: {elapsed_time:.1f}秒\n")
+                f.write(f"字典: {len(self.dictionary)} 条\n")
+                f.write(f"扫描发现: {len(self.results)} 条\n")
+                f.write(f"爬虫测试: {len(self.crawled_test_results)} 条\n\n")
+
+                # 文件类型分类统计
+                f.write(f"--- 文件类型分类 ({len(ext_groups)} 类) ---\n")
+                for ext in sorted(ext_groups.keys(), key=lambda x: len(ext_groups[x]), reverse=True):
+                    items = ext_groups[ext]
+                    f.write(f"  .{ext:<12} {len(items)} 条\n")
+                f.write("\n")
+
+                # 按分类输出
+                for ext in sorted(ext_groups.keys(), key=lambda x: len(ext_groups[x]), reverse=True):
+                    items = ext_groups[ext]
+                    f.write(f"=== .{ext} ({len(items)} 条) ===\n")
+                    for item in sorted(items, key=lambda x: x["status"]):
+                        size = human_size(item["length"]).rjust(6)
+                        redirect = f"  ->  {item['redirect']}" if item["redirect"] else ""
+                        api_tag = " [API]" if "json" in item.get("type", "") else ""
+                        f.write(f"  {item['status']}  {size}  {item['path']}{api_tag}{redirect}\n")
+                    f.write("\n")
+
+            output.warning(f"[*] 结果已保存: {filepath}")
+        except Exception as e:
+            logger.debug(f"自动保存结果失败: {e}")
+
     def reset_consecutive_errors(self, response):
         """重置连续错误计数"""
         self.consecutive_errors = 0
@@ -249,7 +492,7 @@ class Controller:
             )
 
         # 去重: 相同状态码+响应体的只显示第一条（过滤WAF拦截等重复响应）
-        resp_hash = hash((response.status, response.body[:512]))
+        resp_hash = hash((response.status, response.body[:4096]))
         if resp_hash in self.seen_responses:
             self.seen_responses[resp_hash] += 1
             # 记录被过滤的响应
@@ -263,6 +506,12 @@ class Controller:
         # 收集403路径
         if response.status == 403:
             self.paths_403.append(response.full_path)
+
+        # 爬虫: 从响应中提取路径
+        if self.crawler and response.status in range(200, 400):
+            crawled = self.crawler.crawl_response(response)
+            if crawled:
+                self._add_crawled_paths(crawled)
 
         output.status_report(response, options.get("full_url", False))
 
@@ -361,6 +610,7 @@ class Controller:
                 resp.redirect = ""
                 resp.title = r.title
                 resp.body = b""
+                resp.type = ""
                 output.status_report(resp, full_url=True)
         else:
             output.warning("[-] 403 Bypass未发现绕过路径")

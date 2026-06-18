@@ -18,16 +18,19 @@ def locked(func):
 
 
 def cached(timeout):
-    """缓存装饰器"""
+    """缓存装饰器（线程安全）"""
     def decorator(func):
         last_update = [0]
         cache = [None]
+        cache_lock = threading.Lock()
 
         def wrapper(*args, **kwargs):
             now = time.time()
             if now - last_update[0] > timeout:
-                cache[0] = func(*args, **kwargs)
-                last_update[0] = now
+                with cache_lock:
+                    if now - last_update[0] > timeout:
+                        cache[0] = func(*args, **kwargs)
+                        last_update[0] = now
             return cache[0]
         return wrapper
     return decorator

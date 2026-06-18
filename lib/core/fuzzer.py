@@ -7,7 +7,7 @@ import re
 import threading
 import time
 
-from lib.core.data import options
+from lib.core.data import blacklists, options
 from lib.core.exceptions import RequestException
 from lib.core.logger import logger
 from lib.core.scanner import Scanner
@@ -17,7 +17,7 @@ from lib.core.settings import (
     WILDCARD_TEST_POINT_MARKER,
 )
 from lib.parse.url import clean_path
-from lib.utils.common import human_size, lstrip_once
+from lib.utils.common import human_size, lstrip_once, parse_size
 
 
 class Fuzzer:
@@ -31,6 +31,7 @@ class Fuzzer:
         self._is_running = False
         self._play_event = threading.Event()
         self._paused_semaphore = threading.Semaphore(0)
+        self._count_lock = threading.Lock()
         self._base_path = None
         self.exc = None
         self.match_callbacks = kwargs.get("match_callbacks", [])
@@ -183,8 +184,11 @@ class Fuzzer:
                     return True
 
         exclude_sizes = options.get("exclude_sizes", [])
-        if human_size(resp.length).rstrip() in exclude_sizes:
-            return True
+        if exclude_sizes:
+            resp_bytes = resp.length
+            for size_str in exclude_sizes:
+                if parse_size(size_str) == resp_bytes:
+                    return True
 
         min_size = options.get("minimum_response_size", 0)
         if min_size and resp.length < min_size:
@@ -210,17 +214,20 @@ class Fuzzer:
         return False
 
     def is_stopped(self):
-        return self._running_threads_count == 0
+        with self._count_lock:
+            return self._running_threads_count == 0
 
     def decrease_threads(self):
-        self._running_threads_count -= 1
+        with self._count_lock:
+            self._running_threads_count -= 1
 
     def increase_threads(self):
-        self._running_threads_count += 1
+        with self._count_lock:
+            self._running_threads_count += 1
 
     def set_base_path(self, path):
         self._base_path = path
-        self._blacklists = {}
+        self._blacklists = blacklists
 
     def thread_proc(self):
         """线程处理函数"""

@@ -63,7 +63,7 @@ class Output:
             target = response.url
         else:
             target = "/" + response.full_path.lstrip("/")
-        current_time = time.strftime("%H:%M")
+        current_time = time.strftime("%H:%M:%S")
 
         # 状态码颜色
         if status in (200, 201, 204):
@@ -145,6 +145,101 @@ class Output:
         message = set_color(f"[!] {reason}", fore="bright_red", style="bright")
         self.new_line("\n" + message)
 
+    def crawl_found(self, path, source=""):
+        """爬虫发现的路径"""
+        tag = set_color("[待爬取]", fore="bright_yellow", style="bright")
+        path_str = set_color(path, fore="bright_cyan")
+        msg = f"  {tag} {path_str}"
+        if source:
+            msg += set_color(f"  ({source})", fore="white", style="dim")
+        self.new_line(msg)
+
+    def crawl_test_result(self, path, status, length, content_type=""):
+        """爬虫路径自动测试结果"""
+        current_time = time.strftime("%H:%M:%S")
+
+        # 状态码颜色
+        if status in (200, 201, 204):
+            color = "green"
+        elif status == 401:
+            color = "yellow"
+        elif status == 403:
+            color = "blue"
+        elif status in range(300, 400):
+            color = "cyan"
+        else:
+            color = "magenta"
+
+        size_str = human_size(length).rjust(6)
+        time_str = set_color(current_time, fore="white", style="dim")
+        status_str = set_color(str(status), fore=color, style="bright")
+        size_colored = set_color(size_str, fore=color)
+        path_str = set_color(path, fore="bright_cyan")
+
+        ct_str = ""
+        if content_type and "json" in content_type:
+            ct_str = set_color(" [API]", fore="bright_magenta", style="bright")
+
+        message = f"[{time_str}] {status_str} - {size_colored} - {path_str}{ct_str}"
+        self.new_line(message)
+
+    def crawl_test_summary(self, results):
+        """爬虫路径测试结果摘要"""
+        self.new_line()
+        self.new_line(set_color("=" * 60, fore="bright_yellow", style="bright"))
+        self.new_line(set_color("  爬虫路径自动测试结果", fore="bright_yellow", style="bright"))
+        self.new_line(set_color("-" * 60, fore="white", style="dim"))
+        self.new_line(set_color(f"  测试路径: {len(results)} 条", fore="white"))
+
+        # 按状态码分组
+        by_status = {}
+        for r in results:
+            by_status.setdefault(r["status"], []).append(r)
+
+        for status in sorted(by_status.keys()):
+            items = by_status[status]
+            if status in (200, 201, 204):
+                label = set_color("命中存活", fore="black", back="green", style="bright")
+                color = "bright_green"
+            elif status == 401:
+                label = set_color("需鉴权", fore="black", back="yellow", style="bright")
+                color = "bright_yellow"
+            elif status == 403:
+                label = set_color("访问拦截", fore="black", back="red", style="bright")
+                color = "bright_red"
+            elif status in range(300, 400):
+                label = set_color("重定向", fore="black", back="cyan", style="bright")
+                color = "bright_cyan"
+            else:
+                label = set_color("请求异常", fore="black", back="magenta")
+                color = "bright_magenta"
+
+            self.new_line(f"\n  {label}  [{status}]  x{set_color(str(len(items)), fore=color, style='bright')}")
+            for r in sorted(items, key=lambda x: x["length"], reverse=True):
+                size = human_size(r["length"]).rjust(6)
+                ct_tag = ""
+                if "json" in r.get("type", ""):
+                    ct_tag = set_color(" [API]", fore="bright_magenta")
+                redirect = ""
+                if r.get("redirect"):
+                    redirect = set_color(f"  ->  {r['redirect']}", fore="cyan", style="dim")
+                self.new_line(f"    {set_color(size, fore=color)}  {set_color(r['path'], fore='bright_cyan')}{ct_tag}{redirect}")
+
+        # 文件类型分类（紧接状态码之后）
+        ext_groups = {}
+        for r in results:
+            ext = r["path"].rsplit(".", 1)[-1].lower() if "." in r["path"].split("/")[-1] else ""
+            ext_groups.setdefault(ext or "无扩展名", []).append(r)
+        if len(ext_groups) > 1:
+            self.new_line(set_color("  ──────────────────────────────", fore="white", style="dim"))
+            for ext in sorted(ext_groups.keys(), key=lambda x: len(ext_groups[x]), reverse=True):
+                count = len(ext_groups[ext])
+                ext_str = set_color(f".{ext:<10}", fore="bright_cyan")
+                count_colored = set_color(str(count), fore="bright_green", style="bright")
+                self.new_line(f"    {ext_str} {count_colored} 条")
+
+        self.new_line(set_color("=" * 60, fore="bright_yellow", style="bright"))
+
     def warning(self, message, do_save=True):
         """警告输出"""
         message = set_color(f"[*] {message}", fore="bright_yellow", style="bright")
@@ -188,6 +283,8 @@ class Output:
             config["WAF绕过"] = "已启用"
         if options.get("bypass_403", False):
             config["403绕过"] = "已启用"
+        if options.get("crawl", False):
+            config["爬虫模式"] = "已启用"
 
         if options.get("max_rate", 0) > 0:
             config["速率限制"] = f"{options['max_rate']}/s"
@@ -203,7 +300,7 @@ class Output:
         """输出报告文件路径"""
         self.new_line(f"\n输出文件: {file}")
 
-    def scan_summary(self, results, elapsed_time, filtered_count=0, filtered_responses=None):
+    def scan_summary(self, results, elapsed_time, filtered_count=0, filtered_responses=None, crawled_count=0):
         """扫描结果摘要"""
         self.new_line()
         self.new_line(set_color("=" * 60, fore="bright_cyan", style="bright"))
@@ -219,29 +316,46 @@ class Output:
         self.new_line(set_color(f"  发现: {len(results)} 条有效路径", fore="bright_green", style="bright"))
         if filtered_count > 0:
             self.new_line(set_color(f"  过滤: {filtered_count} 条重复响应(WAF拦截等)", fore="white", style="dim"))
+        if crawled_count > 0:
+            self.new_line(set_color(f"  爬虫: {crawled_count} 条路径(从响应中提取)", fore="bright_yellow", style="bright"))
 
         if status_count:
             self.new_line(set_color("  ──────────────────────────────", fore="white", style="dim"))
             for status in sorted(status_count.keys()):
                 count = status_count[status]
                 if status in (200, 201, 204):
-                    label = set_color("FOUND", fore="black", back="green", style="bright")
+                    label = set_color("命中存活", fore="black", back="green", style="bright")
                     color = "bright_green"
                 elif status == 401:
-                    label = set_color("AUTH ", fore="black", back="yellow", style="bright")
+                    label = set_color("需鉴权", fore="black", back="yellow", style="bright")
                     color = "bright_yellow"
                 elif status == 403:
-                    label = set_color("DENY ", fore="black", back="red", style="bright")
+                    label = set_color("访问拦截", fore="black", back="red", style="bright")
                     color = "bright_red"
                 elif status in range(300, 400):
-                    label = set_color("REDIR", fore="black", back="cyan", style="bright")
+                    label = set_color("重定向", fore="black", back="cyan", style="bright")
                     color = "bright_cyan"
                 else:
-                    label = set_color("OTHER", fore="black", back="magenta")
+                    label = set_color("请求异常", fore="black", back="magenta")
                     color = "bright_magenta"
 
                 count_str = set_color(str(count), fore=color, style="bright")
                 self.new_line(f"  {label}  [{status}]  x{count_str}")
+
+        # 文件类型分类统计（紧接状态码之后）
+        if results:
+            ext_groups = {}
+            for r in results:
+                path = "/" + r.full_path.lstrip("/")
+                ext = path.rsplit(".", 1)[-1].lower() if "." in path.split("/")[-1] else ""
+                ext_groups.setdefault(ext or "无扩展名", []).append(r)
+            if len(ext_groups) > 1:
+                self.new_line(set_color("  ──────────────────────────────", fore="white", style="dim"))
+                for ext in sorted(ext_groups.keys(), key=lambda x: len(ext_groups[x]), reverse=True):
+                    count = len(ext_groups[ext])
+                    ext_str = set_color(f".{ext:<10}", fore="bright_cyan")
+                    count_colored = set_color(str(count), fore="bright_green", style="bright")
+                    self.new_line(f"    {ext_str} {count_colored} 条")
 
         self.new_line(set_color("=" * 60, fore="bright_cyan", style="bright"))
 

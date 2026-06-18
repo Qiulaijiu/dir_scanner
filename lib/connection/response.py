@@ -6,6 +6,7 @@ HTTP响应封装
 import re
 
 from lib.core.settings import DEFAULT_ENCODING, ITER_CHUNK_SIZE, MAX_RESPONSE_SIZE
+from lib.core.structures import CaseInsensitiveDict
 from lib.parse.url import clean_path, parse_path
 from lib.utils.common import is_binary
 
@@ -20,7 +21,7 @@ class Response:
         self.full_path = re.sub(r"/+", "/", raw_path) if raw_path else raw_path
         self.path = clean_path(self.full_path)
         self.status = response.status_code
-        self.headers = dict(response.headers)
+        self.headers = CaseInsensitiveDict(response.headers)
         self.redirect = self.headers.get("location", "")
         self.history = [res.url for res in response.history] if hasattr(response, 'history') else []
         self.content = ""

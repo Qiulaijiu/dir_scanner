@@ -34,6 +34,11 @@ class OrderedSet:
 class CaseInsensitiveDict(dict):
     """大小写不敏感的字典"""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        for k, v in dict(*args, **kwargs).items():
+            self[k] = v
+
     def __setitem__(self, key, value):
         super().__setitem__(key.lower() if isinstance(key, str) else key, value)
 

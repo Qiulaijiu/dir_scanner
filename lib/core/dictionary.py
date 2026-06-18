@@ -90,7 +90,8 @@ def list_all_categories(wordlist_dir):
         return categories
 
     for txt_file in sorted(wordlist_path.glob("*.txt")):
-        count = sum(1 for _ in open(txt_file, encoding="utf-8", errors="ignore"))
+        with open(txt_file, encoding="utf-8", errors="ignore") as f:
+            count = sum(1 for _ in f)
         name = txt_file.stem
 
         if name in [w.replace(".txt", "") for w in SRC_WORDLISTS]:
@@ -132,8 +133,10 @@ class Dictionary:
     def __len__(self):
         return len(self._items)
 
-    def generate(self, files=[], is_blacklist=False, categories=None, wordlist_dir=None, mode="default"):
+    def generate(self, files=None, is_blacklist=False, categories=None, wordlist_dir=None, mode="default"):
         """生成字典列表"""
+        if files is None:
+            files = []
         wordlist = OrderedSet()
         re_ext_tag = re.compile(EXTENSION_TAG, re.IGNORECASE)
 
@@ -190,8 +193,8 @@ class Dictionary:
                     if not path.endswith(("/", suff)) and "?" not in path and "#" not in path:
                         altered_wordlist.add(path + suff)
 
-            if altered_wordlist:
-                wordlist = altered_wordlist
+            for path in altered_wordlist:
+                wordlist.add(path)
 
         # 大小写转换
         if options.get("lowercase", False):
@@ -273,7 +276,8 @@ def list_categories(wordlist_dir):
         return categories
 
     for txt_file in sorted(wordlist_path.glob("*.txt")):
-        count = sum(1 for _ in open(txt_file, encoding="utf-8", errors="ignore"))
+        with open(txt_file, encoding="utf-8", errors="ignore") as f:
+            count = sum(1 for _ in f)
         categories.append((txt_file.stem, count))
 
     return categories

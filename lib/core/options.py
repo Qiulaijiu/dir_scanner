@@ -173,6 +173,12 @@ def parse_options():
     if args.random_user_agents:
         options["random_agents"] = True
 
+    # 爬虫设置
+    options["crawl"] = not args.no_crawl
+    options["crawl_depth"] = args.crawl_depth if args.crawl_depth > 0 else 0
+    options["no_robots"] = args.no_robots
+    options["no_sitemap"] = args.no_sitemap
+
     # 视图设置
     options["full_url"] = args.full_url
     options["color"] = not args.no_color
@@ -183,6 +189,9 @@ def parse_options():
     options["output_file"] = args.output
     options["output_format"] = args.format
     options["log_file"] = args.log
+
+    # 历史记录
+    options["force"] = args.force
 
     # 设置默认值
     options.setdefault("extensions", COMMON_EXTENSIONS)
