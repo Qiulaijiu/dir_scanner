@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 dir_scanner - SRC目录扫描工具
-整合SRC内部字典和dirsearch通用字典，支持WAF绕过、频率限制、随机UA池
+整合SRC内部字典和dirsearch通用字典，支持WAF绕过、频率限制、随机UA池、爬虫模式
 
 用法:
   # 默认模式 (使用dirsearch通用字典 dicc.txt, 9482条)
@@ -13,6 +13,9 @@ dir_scanner - SRC目录扫描工具
 
   # SRC分类模式 (指定SRC类别)
   python dir_scanner.py -u http://target.com --src-category "管理后台路径,API接口路径"
+
+  # 爬虫模式 (从HTML/JS/robots.txt/sitemap.xml中提取路径)
+  python dir_scanner.py -u http://target.com --crawl
 
   # 其他选项
   python dir_scanner.py -u http://target.com --waf-bypass --max-rate 20
@@ -105,6 +108,58 @@ def main():
         print(", ".join(COMMON_EXTENSIONS))
         return
 
+    # 扫描历史
+    if args.history:
+        from lib.core.history import list_history
+        history = list_history()
+        if not history:
+            print("\n[*] 暂无扫描历史记录")
+        else:
+            print(f"\n{'='*70}")
+            print("  dir_scanner - 扫描历史")
+            print(f"{'='*70}")
+            for url, entry in sorted(history.items(), key=lambda x: x[1].get("timestamp", 0), reverse=True):
+                print(f"\n  目标: {url}")
+                print(f"  时间: {entry.get('scan_time', 'N/A')}")
+                print(f"  耗时: {entry.get('elapsed_time', 0)}秒")
+                print(f"  模式: {entry.get('mode', 'N/A')}")
+                if entry.get("categories"):
+                    print(f"  类别: {', '.join(entry['categories'])}")
+                print(f"  字典: {entry.get('wordlist_size', 0)} 条")
+                print(f"  发现: {entry.get('total_found', 0)} 条有效路径")
+                status = entry.get("status_summary", {})
+                if status:
+                    parts = [f"[{s}]x{c}" for s, c in sorted(status.items())]
+                    print(f"  状态: {', '.join(parts)}")
+                crawled = entry.get("crawled_results", [])
+                if crawled:
+                    print(f"  爬虫测试: {len(crawled)} 条路径")
+                    for r in crawled[:10]:
+                        from lib.utils.common import human_size
+                        size = human_size(r.get("length", 0))
+                        ct = r.get("content_type", "")
+                        tag = " [API]" if "json" in ct else ""
+                        print(f"    [{r['status']}] {size}  {r['path']}{tag}")
+                    if len(crawled) > 10:
+                        print(f"    ... 还有 {len(crawled) - 10} 条")
+            print(f"\n{'='*70}")
+            print(f"  共 {len(history)} 条历史记录")
+            print(f"{'='*70}")
+        return
+
+    # 清除历史
+    if args.clear_history is not None:
+        from lib.core.history import clear_history
+        if args.clear_history == "__all__":
+            clear_history()
+            print("\n[*] 已清除全部扫描历史")
+        else:
+            if clear_history(args.clear_history):
+                print(f"\n[*] 已清除 {args.clear_history} 的扫描历史")
+            else:
+                print(f"\n[!] 未找到 {args.clear_history} 的扫描历史")
+        return
+
     # 解析完整选项
     parsed_options = parse_options()
 
@@ -116,6 +171,7 @@ def main():
         print("用法:")
         print("  python dir_scanner.py -u http://target.com              # 默认模式(dirsearch字典)")
         print("  python dir_scanner.py -u http://target.com --src        # SRC模式(SRC专项字典)")
+        print("  python dir_scanner.py -u http://target.com --crawl      # 启用爬虫(从响应中提取路径)")
         print()
         print("查看所有选项: python dir_scanner.py -h")
         print("列出字典类别: python dir_scanner.py --list")
